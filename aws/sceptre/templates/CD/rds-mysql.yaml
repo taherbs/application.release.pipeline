@@ -1,0 +1,353 @@
+Description: >
+
+     RDS database provisioning template
+
+AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+  AppName:
+    Description: App name
+    Type: String
+
+  Environment:
+    Type: String
+
+  Vpc:
+    ConstraintDescription: Must begin with a letter and contain only alphanumeric characters.
+    Description: The vpc id.
+    Type: String
+
+  DataSubnets:
+    Description: The subnets for data layer
+    Type: CommaDelimitedList
+
+  DatabaseEngine:
+    Description: Database Engine.
+    Type: String
+
+  DatabaseEngineVersion:
+    Description: Database Engine version.
+    Type: String
+
+  DatabaseInstanceClass:
+    Description: Must be a valid RDS instance type.
+    Type: String
+
+  DatabaseMasterUsername:
+    Description: Name of master user.
+    Type: String
+
+  DatabaseUserPassword:
+    Description: User password.
+    NoEcho: "true"
+    Type: String
+
+  AccessSecurityGroup:
+    Type: String
+
+  DatabaseBackupRetentionPeriod:
+    Type: String
+    Default: 7
+    AllowedValues:
+        - 1
+        - 7
+
+  AllocatedStorage:
+    Type: String
+    Default: 100
+
+  AllocatedIops:
+    Type: String
+    Default: 1000
+
+  MultiAZDatabase:
+    Default: 'true'
+    Type: String
+    AllowedValues:
+    - 'true'
+    - 'false'
+
+Conditions:
+  IsProduction: !Equals [!Ref Environment, "prd"]
+
+Resources:
+  ### RDS ###
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription:
+        !Join
+        - "-"
+        - - !Ref AppName
+          - !Ref Environment
+      SubnetIds: !Ref DataSubnets
+
+  DBParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: !Ref AppName
+      Family: mysql5.7
+
+  DBInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    Properties:
+      MultiAZ: !Ref MultiAZDatabase
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      Engine: !Ref DatabaseEngine
+      EngineVersion: !Ref DatabaseEngineVersion
+      PubliclyAccessible: 'false'
+      DBInstanceClass: !Ref DatabaseInstanceClass
+      BackupRetentionPeriod: !Ref DatabaseBackupRetentionPeriod
+      PreferredBackupWindow: 02:00-03:00
+      PreferredMaintenanceWindow: mon:04:00-mon:05:00
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      MasterUsername: !Ref DatabaseMasterUsername
+      MasterUserPassword: !Ref DatabaseUserPassword
+      DBParameterGroupName: !Ref DBParameterGroup
+      AllocatedStorage: !Ref AllocatedStorage
+      StorageType: !If [ IsProduction, "io1" , "gp2"  ]
+      Iops: !If [ IsProduction, !Ref AllocatedIops , 0  ]
+      VPCSecurityGroups:
+        - !Ref AccessSecurityGroup
+      DBInstanceIdentifier:
+        !Join
+        - "-"
+        - - !Ref AppName
+          - !Ref Environment
+
+  Dashboard:
+    Type: "AWS::CloudWatch::Dashboard"
+    Properties:
+      DashboardName: 
+        !Join
+        - "-"
+        - - !Ref DBInstance
+          - RDS
+      DashboardBody: !Sub |
+        {
+         "widgets":[
+            {
+               "type":"metric",
+               "width":12,
+               "height":6,
+               "properties":{
+                  "view":"timeSeries",
+                  "stacked":false,
+                  "metrics":[
+                     [
+                        "AWS/RDS",
+                        "CPUUtilization",
+                        "DBInstanceIdentifier",
+                        "${DBInstance}"
+                     ]
+                  ],
+                  "region":"${AWS::Region}"
+               }
+            },
+            {
+               "type":"metric",
+               "width":12,
+               "height":6,
+               "properties":{
+                  "view":"timeSeries",
+                  "stacked":false,
+                  "metrics":[
+                    [
+                       "AWS/RDS",
+                       "CPUCreditUsage",
+                       "DBInstanceIdentifier",
+                       "${DBInstance}"
+                    ],
+                    [
+                       "AWS/RDS",
+                       "CPUCreditBalance",
+                       "DBInstanceIdentifier",
+                       "${DBInstance}"
+                    ]
+                  ],
+                  "region":"${AWS::Region}"
+               }
+            },
+            {
+               "type":"metric",
+               "width":12,
+               "height":6,
+               "properties":{
+                  "view":"timeSeries",
+                  "stacked":false,
+                  "metrics":[
+                     [
+                        "AWS/RDS",
+                        "ReadIOPS",
+                        "DBInstanceIdentifier",
+                        "${DBInstance}"
+                     ],
+                    [
+                       "AWS/RDS",
+                       "WriteIOPS",
+                       "DBInstanceIdentifier",
+                       "${DBInstance}"
+                    ]
+                  ],
+                  "region":"${AWS::Region}"
+               }
+            },
+            {
+               "type":"metric",
+               "width":12,
+               "height":6,
+               "properties":{
+                  "view":"timeSeries",
+                  "stacked":false,
+                  "metrics":[
+                     [
+                        "AWS/RDS",
+                        "ReadThroughput",
+                        "DBInstanceIdentifier",
+                        "${DBInstance}"
+                     ],
+                    [
+                       "AWS/RDS",
+                       "WriteThroughput",
+                       "DBInstanceIdentifier",
+                       "${DBInstance}"
+                    ]
+                  ],
+                  "region":"${AWS::Region}"
+               }
+            },
+            {
+               "type":"metric",
+               "width":12,
+               "height":6,
+               "properties":{
+                  "view":"timeSeries",
+                  "stacked":false,
+                  "metrics":[
+                     [
+                        "AWS/RDS",
+                        "NetworkReceiveThroughput",
+                        "DBInstanceIdentifier",
+                        "${DBInstance}"
+                     ],
+                    [
+                       "AWS/RDS",
+                       "NetworkTransmitThroughput",
+                       "DBInstanceIdentifier",
+                       "${DBInstance}"
+                    ]
+                  ],
+                  "region":"${AWS::Region}"
+               }
+            },
+            {
+               "type":"metric",
+               "width":12,
+               "height":6,
+               "properties":{
+                  "view":"timeSeries",
+                  "stacked":false,
+                  "metrics":[
+                     [
+                        "AWS/RDS",
+                        "FreeableMemory",
+                        "DBInstanceIdentifier",
+                        "${DBInstance}"
+                     ],
+                    [
+                       "AWS/RDS",
+                       "FreeStorageSpace",
+                       "DBInstanceIdentifier",
+                       "${DBInstance}"
+                    ],
+                    [
+                       "AWS/RDS",
+                       "SwapUsage",
+                       "DBInstanceIdentifier",
+                       "${DBInstance}"
+                    ],
+                    [
+                       "AWS/RDS",
+                       "BinLogDiskUsage",
+                       "DBInstanceIdentifier",
+                       "${DBInstance}"
+                    ]
+                  ],
+                  "region":"${AWS::Region}"
+               }
+            },
+            {
+               "type":"metric",
+               "width":12,
+               "height":6,
+               "properties":{
+                  "view":"timeSeries",
+                  "stacked":false,
+                  "metrics":[
+                     [
+                        "AWS/RDS",
+                        "ReadLatency",
+                        "DBInstanceIdentifier",
+                        "${DBInstance}"
+                     ],
+                    [
+                       "AWS/RDS",
+                       "WriteLatency",
+                       "DBInstanceIdentifier",
+                       "${DBInstance}"
+                    ],
+                    [
+                       "AWS/RDS",
+                       "ReplicaLag",
+                       "DBInstanceIdentifier",
+                       "${DBInstance}"
+                    ]
+                  ],
+                  "region":"${AWS::Region}"
+               }
+            },
+            {
+               "type":"metric",
+               "width":12,
+               "height":6,
+               "properties":{
+                  "view":"timeSeries",
+                  "stacked":false,
+                  "metrics":[
+                     [
+                        "AWS/RDS",
+                        "BurstBalance",
+                        "DBInstanceIdentifier",
+                        "${DBInstance}"
+                     ]
+                  ],
+                  "region":"${AWS::Region}"
+               }
+            },
+            {
+               "type":"metric",
+               "width":12,
+               "height":6,
+               "properties":{
+                  "view":"timeSeries",
+                  "stacked":false,
+                  "metrics":[
+                     [
+                        "AWS/RDS",
+                        "DiskQueueDepth",
+                        "DBInstanceIdentifier",
+                        "${DBInstance}"
+                     ]
+                  ],
+                  "region":"${AWS::Region}"
+               }
+            }
+         ]
+        }
+
+Outputs:
+  DBEndpoint:
+    Value: !GetAtt DBInstance.Endpoint.Address
+  Dashboard:
+    Value: !Sub https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${DBInstance}

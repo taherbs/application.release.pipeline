@@ -1,0 +1,16 @@
+template_path: templates/CI/codepipeline.yaml
+parameters:
+  Name: {{ environment_config.project_code }}
+  KMSArtifactKeyArn: {{ environment_config.kms_key_arn }}
+  BuildApp: !stack_output ci/codebuild/build-app::BuildName
+  BuildWeb: !stack_output ci/codebuild/build-web::BuildName
+  BuildDeployStg: !stack_output ci/codebuild/deploy-stg::BuildName
+  BuildDeployPrd: !stack_output ci/codebuild/deploy-prd::BuildName
+  S3BucketOutputArtifact: {{ environment_config.s3_artifacts_output_bucket }}
+  GitToken: {{ environment_config.git_token }}
+  GitOwner: {{ environment_config.git_owner }}
+  GitRepositoryApplication: {{ environment_config.git_repository }}
+  GitBranchApplication: {{ environment_config.git_branch }}
+  SNSTopic: !stack_output misc/sns::SNSTopic
+stack_tags:
+  project: {{ environment_config.project_code }}

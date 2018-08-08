@@ -1,0 +1,14 @@
+template_path: templates/CI/codebuild.yaml
+parameters:
+  Name: {{ environment_config.project_code }}
+  Stage: deploy-stg
+  Environment: stg
+  CodeBuildComputeType: BUILD_GENERAL1_SMALL
+  CodeBuildImage: aws/codebuild/python:3.6.5
+  CodeBuildType: LINUX_CONTAINER
+  S3BucketOutputArtifact: {{ environment_config.s3_artifacts_output_bucket }}
+  KMSArtifactKeyArn: {{ environment_config.kms_key_arn }}
+  SNSTopic: !stack_output misc/sns::SNSTopic
+  BuildSpecPath: aws/codebuild/deploy.yaml
+stack_tags:
+  project: {{ environment_config.project_code }}

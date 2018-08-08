@@ -1,0 +1,35 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  Name:
+    Description: The service name
+    Type: String
+  EmailAddressTeams:
+    Description: Topic SNS for notification.
+    Type: String
+Resources:
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Ref Name
+      Subscription:
+      - Endpoint: !Ref EmailAddressTeams
+        Protocol: email
+  SNSTopicPolicy:
+    Type: "AWS::SNS::TopicPolicy"
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: SourceCodePipelineToTopic
+            Effect: 'Allow'
+            Principal:
+              Service:
+              - events.amazonaws.com
+            Action:
+              - 'sns:Publish'
+            Resource: !Ref SNSTopic
+      Topics:
+        - !Ref SNSTopic
+Outputs:
+  SNSTopic:
+    Value: !Ref SNSTopic

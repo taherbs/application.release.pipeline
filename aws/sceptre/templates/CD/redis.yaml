@@ -1,0 +1,83 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: Redis cluster
+
+Parameters:
+  Name:
+    Description: Project ID.
+    Type: String
+  Environment:
+    Description: Environment name.
+    Type: String
+  VpcId:
+    Type: String
+    Description: The VPC ID
+  ClusterSubnetIDs:
+    Type: CommaDelimitedList
+    Description: Comma-delimited list of the data subnets
+  RedisSecurityGroup:
+    Type: String
+    Description: the sercurity group that should be used by the redis cluster    
+  NodeType:
+    Type: String
+  NumCacheClusters:
+    Type: String
+
+Resources:
+
+  RedisCluster:
+    DependsOn: RedisSubnetGroup
+    Type: AWS::ElastiCache::ReplicationGroup
+    Properties:
+      EngineVersion: "3.2.6"
+      ReplicationGroupId:
+        !Join
+        - "-"
+        - - !Ref Name
+          - !Ref Environment
+      AutomaticFailoverEnabled: 'true'
+      CacheNodeType: !Ref NodeType
+      Engine: redis
+      NumCacheClusters: !Ref NumCacheClusters
+      ReplicationGroupDescription:
+        !Join
+        - "-"
+        - - !Ref Name
+          - !Ref Environment
+          - Redis_Replication_Group
+      SecurityGroupIds:
+        - !Ref RedisSecurityGroup
+      CacheSubnetGroupName:
+        !Join
+        - ""
+        - - !Ref Name
+          - !Ref Environment
+          - ElastiCacheSG
+  
+  RedisSubnetGroup:
+    Type: "AWS::ElastiCache::SubnetGroup"
+    Properties:
+      CacheSubnetGroupName:
+        !Join
+        - ""
+        - - !Ref Name
+          - !Ref Environment
+          - ElastiCacheSG
+      Description: "subnets for images indexes cluster"
+      SubnetIds: !Ref ClusterSubnetIDs
+
+Outputs:
+  RedisID:
+    Description: Redis instance ID
+    Value:
+      Ref: RedisCluster
+  RedisEndpoint:
+    Description: Redis endpoint address
+    Value:
+      Fn::GetAtt:
+      - RedisCluster
+      - PrimaryEndPoint.Address
+  SecurityID:
+    Description: Security group ID
+    Value:
+      Ref: RedisSecurityGroup

@@ -1,0 +1,22 @@
+project_code: myservice-test
+region: eu-west-1
+# To store artifacts to S3 enable template_bucket_name and template_key_prefix
+template_bucket_name: myservice-test-templates
+template_key_prefix: cloudformation/myservice-test
+
+# Project Global variables
+email_team: dev.team@company.com
+git_repository: application.release.pipeline
+git_branch: master
+#git_token: gittoken
+git_owner: taherbs
+kms_key_arn: arn:aws:kms:eu-west-1:XXXXXXXXXXXX:key/XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+s3_artifacts_output_bucket: aws-output-artifacts
+s3_elb_logs_bucket: aws-elb-logs
+project_vpc: vpc-XXXXXXXXXXXXXXXXX
+project_app_subnets: subnet-XXXXXX,subnet-XXXXXX,subnet-XXXXXX
+project_public_subnets: subnet-XXXXXX,subnet-XXXXXX,subnet-XXXXXX
+hosted_zone_name: something.company.net
+hosted_zone_id: XXXXXXXXX
+elb_cert: XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+elb_health_check_path: /hc/index.htmlxz

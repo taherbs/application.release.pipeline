@@ -1,0 +1,11 @@
+version: 0.2
+phases:
+  pre_build:
+    commands:
+      - echo "# Install sceptre - prerequisites"
+      - pip install sceptre
+  build:
+    commands:
+      - echo "# Deploy ${SERVICE_ENV}"
+      - cd ${PWD}/aws/sceptre
+      - sceptre launch-env cd/${SERVICE_ENV}

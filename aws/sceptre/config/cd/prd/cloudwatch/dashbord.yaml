@@ -1,0 +1,11 @@
+template_path: templates/CD/cloudwatch-dashbord.yaml
+parameters:
+  Name: {{ environment_config.project_code }}
+  Environment: {{ environment_config.project_env }}
+  ClusterName: !stack_output cd/prd/ecs/fargateservice::ClusterName
+  LoadBalancerFullName: !stack_output cd/prd/net/alb::LoadBalancerFullName
+  TargetGroupLoadBalancer: !stack_output cd/prd/net/alb::TargetGroupLoadBalancer
+  ServiceNameApp: !stack_output cd/prd/ecs/fargateservice::ServiceName
+  Route53HealthCheckId: !stack_output_region_aware cd/prd/route53/healthcheck::Route53HealthcheckId
+stack_tags:
+  project: {{ environment_config.project_code }}

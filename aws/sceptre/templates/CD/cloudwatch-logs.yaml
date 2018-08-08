@@ -1,0 +1,30 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  Name:
+    Description: The service name
+    Type: String
+  Environment:
+    Description: Environment name.
+    Type: String
+  RetentionInDays:
+    Description: Logs retention time, in days.
+    Type: Number
+    Default: 3653
+Resources:
+  LogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Join:
+          - "/"
+          - - ""
+            - "aws/ecs"
+            - !Ref Name
+            - !Ref Environment
+      RetentionInDays: !Ref RetentionInDays
+Outputs:
+  LogsGroup:
+    Value: !Ref LogsGroup
+  CloudWatchURL:
+    Description: CloudWatch production url.
+    Value: !Sub https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#logStream:group=${LogsGroup}

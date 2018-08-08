@@ -1,0 +1,13 @@
+template_path: templates/CD/fargate-service.yaml
+parameters:
+  Name: {{ environment_config.project_code }}
+  Environment: {{ environment_config.project_env }}
+  TargetGroupLoadBalancerArn: !stack_output cd/stg/net/alb::TargetGroupLoadBalancerArn
+  ECRRepositoryApp: !stack_output ci/ecr/app::ecrrepo
+  ECRRepositoryWeb: !stack_output ci/ecr/web::ecrrepo
+  LogsGroup: !stack_output cd/stg/cloudwatch/logs::LogsGroup
+  ECSTaskExecutionRole: !stack_output cd/stg/ecs/fargaterole::ECSTaskExecutionRole
+  TaskSubnets: {{ environment_config.project_app_subnets }}
+  FargateContainerSecurityGroup: !stack_output cd/stg/ecs/fargaterole::FargateContainerSecurityGroup
+stack_tags:
+  project: {{ environment_config.project_code }}

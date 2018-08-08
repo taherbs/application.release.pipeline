@@ -1,0 +1,124 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  Name:
+    Description: The service name
+    Type: String
+  Stage:
+    Description: The service name
+    Type: String
+  CodeBuildComputeType:
+    Description: Compute size of build machine.
+    Type: String
+  CodeBuildImage:
+    Description: Image of build machine.
+    Type: String
+  CodeBuildType:
+    Description: Image of build machine.
+    Type: String
+  KMSArtifactKeyArn:
+    Description: KMS Key ARN for encrypt/decrypt artifact.
+    Type: String
+  ECRRepository:
+    Type: String
+    Default: ''
+  Environment:
+    Type: String
+    Default: ''
+  S3BucketOutputArtifact:
+    Description: S3 Bucket Name for cache codebuild
+    Type: String
+  SNSTopic:
+    Type: String
+  BuildSpecPath:
+    Type: String
+Resources:
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Join ["-", [ !Ref Name, 'codebuild', !Ref Stage ] ]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - codebuild.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: !Ref Name
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action: "*"
+            Resource: "*"
+  BuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Join ["-", [ !Ref Name, !Ref Stage ] ]
+      ServiceRole: !Ref CodeBuildRole
+      Cache:
+        Type: S3
+        Location: !Join ["/", [ !Ref S3BucketOutputArtifact, "cache" , !Ref Name, !Ref Stage ] ]
+      Artifacts:
+        Type: CODEPIPELINE
+      TimeoutInMinutes: 15
+      Environment:
+        ComputeType: !Ref CodeBuildComputeType
+        Image: !Ref CodeBuildImage
+        Type: !Ref CodeBuildType
+        EnvironmentVariables:
+        - Name: AWS_DEFAULT_REGION
+          Value: !Ref AWS::Region
+        - Name: AWS_ACCOUNT_ID
+          Value: !Ref AWS::AccountId
+        - Name: REPOSITORY_URI
+          Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepository}
+        - Name: SERVICE_ENV
+          Value: !Ref Environment
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: !Ref BuildSpecPath
+      EncryptionKey: !Ref KMSArtifactKeyArn
+  CodeBuildStateChange:
+    Type: "AWS::Events::Rule"
+    Properties:
+      Description: "Push message to topic when build state change"
+      EventPattern:
+        {
+          "source": [
+            "aws.codebuild"
+          ],
+          "detail-type": [
+            "CodeBuild Build State Change"
+          ],
+          "detail": {
+            "build-status": [
+              "FAILED"
+            ],
+            "project-name": [
+              !Ref BuildProject
+            ]
+          }
+        }
+      Name:
+        Fn::Join:
+        - "-"
+        - - !Ref BuildProject
+          - "CodeBuildStateChange"
+      Targets:
+        - Arn: !Ref SNSTopic
+          Id: "CodeBuildNotificationTopic"
+          InputTransformer:
+              InputPathsMap:
+                project-name: "$.detail.project-name"
+                build-status: "$.detail.build-status"
+              InputTemplate: '"The build project <project-name> has reached the build status of <build-status>."'
+Outputs:
+  BuildName:
+    Value: !Ref BuildProject
+  BuildURL:
+    Description: Build URL.
+    Value: !Sub https://console.aws.amazon.com/codebuild/home?region=${AWS::Region}#/projects/${BuildProject}/view

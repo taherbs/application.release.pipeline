@@ -1,0 +1,201 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  Name:
+    Description: The service name
+    Type: String
+  Environment:
+    Description: Environment name.
+    Type: String
+  VpcID:
+    Description: The vpc id.
+    Type: AWS::EC2::VPC::Id
+  LoadBalancerSubnets:
+    Type: List<AWS::EC2::Subnet::Id>
+  LogBucketName:
+    Description: The bucket used for logging
+    Type: String
+  HostedZoneId:
+    Description: The ID of the hosted zone.
+    Type: String
+  HostedZoneName:
+    Description: The name of the domain for the hosted zone where you want to add the record set.
+    Type: String
+  SubDomainName:
+    Description: The name of the domain for the hosted zone where you want to add the record set.
+    Type: String
+  ElbCert:
+    Description: The ARN for the certificate to use for ELB. Leave blank to disable HTTPS.
+    Type: String
+  Path:
+    Description: The path to register with the Application Load Balancer.
+    Type: String
+    Default: /
+  ALBPolicyType:
+    Description: Policy for public or trusted Application LoadBalancer
+    Type: String
+    AllowedValues:
+      - 'public'
+      - 'trusted'
+    Default: 'trusted'
+  TrustedIpAddress:
+    Type: String
+    Description: LB Truested IP address/mask source
+    Default: '0.0.0.0/0'
+  HealthCheckPath:
+    Type: String
+  WebACLId:
+    Type: String
+    Default: ''
+  ActivateWAF:
+    Type: String
+    AllowedValues:
+      - 'enabled'
+      - 'disabled'
+    Default: 'enabled'
+Conditions:
+  CheckALBPolicyType: !Equals [!Ref ALBPolicyType, "public"]
+  WAFActivated: !Equals [!Ref ActivateWAF, 'enabled']
+Resources:
+  PublicLoadBalancerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Access to the public facing load balancer
+      VpcId: !Ref 'VpcID'
+      SecurityGroupIngress:
+          # Allow access to ALB from anywhere on the internet
+          - CidrIp: '0.0.0.0/0'
+            IpProtocol: '-1'
+  TrustedPublicLoadBalancerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Access to the public facing load balancer only by trusted networks
+      VpcId: !Ref 'VpcID'
+      SecurityGroupIngress:
+          # Allow access to ALB from only trusted networks on the internet
+          # Tunis public IP
+          - CidrIp: !Ref TrustedIpAddress
+            FromPort: '443'
+            ToPort: '443'
+            IpProtocol: 'tcp'
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Join ['-', [!Ref 'Name', !Ref 'Environment']]
+      Scheme: internet-facing
+      Subnets: !Ref LoadBalancerSubnets
+      LoadBalancerAttributes:
+      - Key: idle_timeout.timeout_seconds
+        Value: '60'
+      - Key: access_logs.s3.enabled
+        Value: 'true'
+      - Key: access_logs.s3.bucket
+        Value: !Ref LogBucketName
+      - Key: access_logs.s3.prefix
+        Value: !Join ['-', [!Ref 'Name', !Ref 'Environment']]
+      SecurityGroups:
+      - !If [ CheckALBPolicyType, !Ref PublicLoadBalancerSG,  !Ref TrustedPublicLoadBalancerSG ]
+  TargetGroupLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Join ['-', [!Ref 'Name', !Ref 'Environment']]
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      HealthCheckTimeoutSeconds: 2
+      HealthCheckIntervalSeconds: 5
+      HealthCheckPath: !Ref HealthCheckPath
+      VpcId: !Ref VpcID
+      Port: 80
+      Protocol: HTTP
+      TargetType: ip
+      Matcher:
+        HttpCode: '200-399'
+      TargetGroupAttributes:
+      - Key: deregistration_delay.timeout_seconds
+        Value: '60'
+  ListenerLoadBalancerHTTPS:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Certificates:
+        - CertificateArn: !Sub "arn:aws:acm:${AWS::Region}:${AWS::AccountId}:certificate/${ElbCert}"
+      Port: '443'
+      Protocol: HTTPS
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroupLoadBalancer
+  ListenerRuleHTTPS:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+      - TargetGroupArn: !Ref TargetGroupLoadBalancer
+        Type: forward
+      ListenerArn: !Ref ListenerLoadBalancerHTTPS
+      Priority: 1
+      Conditions:
+      - Field: path-pattern
+        Values:
+        - !Ref Path
+  ListenerLoadBalancerHTTP:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: '80'
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroupLoadBalancer
+  ListenerRuleHTTP:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+      - TargetGroupArn: !Ref TargetGroupLoadBalancer
+        Type: forward
+      ListenerArn: !Ref ListenerLoadBalancerHTTP
+      Priority: 1
+      Conditions:
+      - Field: path-pattern
+        Values:
+        - !Ref Path
+  WAFAssociation:
+    Type: AWS::WAFRegional::WebACLAssociation
+    Condition: WAFActivated
+    Properties:
+      ResourceArn: !Ref LoadBalancer
+      WebACLId: !Ref WebACLId
+  RecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Join ['.', [!Ref 'SubDomainName', !Ref 'HostedZoneName']]
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt LoadBalancer.DNSName
+        HostedZoneId: !GetAtt LoadBalancer.CanonicalHostedZoneID
+Outputs:
+  TargetGroupLoadBalancer:
+    Description: Full name for the Frontend Application LoadBalancer target group
+    Value: !GetAtt TargetGroupLoadBalancer.TargetGroupFullName
+  TargetGroupLoadBalancerArn:
+    Description: ARN for the Frontend Application LoadBalancer target group
+    Value: !Ref TargetGroupLoadBalancer
+  LoadBalancerEndpoint:
+    Description: ALB endpoint name
+    Value: !GetAtt LoadBalancer.DNSName
+  LoadBalancerFullName:
+    Description: ALB name
+    Value: !GetAtt LoadBalancer.LoadBalancerFullName
+  ALBPolicyType:
+    Description: The balancer policy used
+    Value: !Ref ALBPolicyType
+  Url:
+    Description: The application URL
+    Value: !Sub https://${RecordSet}
+  PublicLoadBalancerSG:
+    Description: The public access SG created
+    Value: !Ref PublicLoadBalancerSG
+  TrustedPublicLoadBalancerSG:
+    Description: The trusted access SG created
+    Value: !Ref TrustedPublicLoadBalancerSG
+  AlbURL:
+    Description: ALB url.
+    Value: !Sub https://eu-west-1.console.aws.amazon.com/ec2/v2/home?region=${AWS::Region}#LoadBalancers:search=${LoadBalancer.LoadBalancerFullName}

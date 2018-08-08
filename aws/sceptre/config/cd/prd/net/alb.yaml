@@ -1,0 +1,16 @@
+template_path: templates/CD/alb.yaml
+parameters:
+  Name: {{ environment_config.project_code }}
+  Environment: {{ environment_config.project_env }}
+  VpcID: {{ environment_config.project_vpc }}
+  LoadBalancerSubnets: {{ environment_config.project_public_subnets }}
+  HostedZoneId: {{ environment_config.hosted_zone_id }}
+  HostedZoneName: {{ environment_config.hosted_zone_name }}
+  SubDomainName: {{ environment_config.project_subdomain }}
+  ElbCert: {{ environment_config.elb_cert }}
+  ALBPolicyType: {{ environment_config.prd_alb_policy }}
+  HealthCheckPath: {{ environment_config.elb_health_check_path }}
+  ActivateWAF: {{ environment_config.enable_waf }}
+  LogBucketName: {{ environment_config.s3_elb_logs_bucket }}
+stack_tags:
+  project: {{ environment_config.project_code }}

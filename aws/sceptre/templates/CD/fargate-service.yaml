@@ -1,0 +1,208 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  Name:
+    Type: String
+  Environment:
+    Description: Environment name.
+    Type: String
+    AllowedValues:
+      - stg
+      - prd
+  TargetGroupLoadBalancerArn:
+    Description: A list of Amazon Resource Names (ARN) of target groups to associate with the Auto Scaling group.
+    Type: String
+  ECRRepositoryApp:
+    Description: ECR repository.
+    Type: String
+  ECRRepositoryWeb:
+    Description: ECR repository.
+    Type: String
+  TaskNameApp:
+    Description: Name of the task.
+    Type: String
+    Default: app
+  TaskNameWeb:
+    Description: Name of the task.
+    Type: String
+    Default: web
+  TagWeb:
+    Description: Tag of the image.
+    Type: String
+    Default: latest
+  TagApp:
+    Description: Tag of the image.
+    Type: String
+    Default: latest
+  LogsGroup:
+    Description: the logsgroup used by task
+    Type: String
+  ContainerPort:
+    Type: Number
+    Default: 80
+    Description: What port number the application inside the docker container is binding to
+  DesiredCount:
+    Type: Number
+    Default: 2
+    Description: How many copies of the service task to run
+  ECSTaskExecutionRole:
+    Type: String
+  TaskSubnets:
+    Type: List<String>
+  FargateContainerSecurityGroup:
+    Type: List<String>
+Resources:
+
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Join ['-', [!Ref 'Name', !Ref 'Environment']]
+
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Join ["-", [ !Ref Name, !Ref Environment ] ]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          Effect: Allow
+          Principal:
+            Service: ecs-tasks.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Join ["-", [ !Ref Name, !Ref Environment ] ]
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action:
+                  - ssm:GetParameters
+                  - ssm:GetParametersByPath
+                  - ssm:GetParameter
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${Name}/*
+                Effect: Allow
+  #https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-cpu-memory-error.html
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Join ["-", [ !Ref Name, !Ref Environment ] ]
+      Cpu: 1024
+      Memory: 2048
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      TaskRoleArn: !Ref TaskRole
+      ContainerDefinitions:
+      - Name: !Join ["-", [ !Ref Name, !Ref Environment, !Ref TaskNameWeb ] ]
+        Cpu: 256
+        Memory: 512
+        PortMappings:
+        - ContainerPort: !Ref 'ContainerPort'
+        Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepositoryWeb}:${TagWeb}
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-group: !Ref 'LogsGroup'
+            awslogs-region: !Ref 'AWS::Region'
+            awslogs-stream-prefix: "web"
+      - Name: !Join ["-", [ !Ref Name, !Ref Environment, !Ref TaskNameApp ] ]
+        Cpu: 512
+        Memory: 1024
+        Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepositoryApp}:${TagApp}
+        Environment:
+          - Name: APP_ENV
+            Value: !Ref 'Environment'
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-group: !Ref 'LogsGroup'
+            awslogs-region: !Ref 'AWS::Region'
+            awslogs-stream-prefix: "app"
+  Service:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Join ["-", [ !Ref Name, !Ref Environment ] ]
+      Cluster: !Ref 'ECSCluster'
+      LaunchType: FARGATE
+      DeploymentConfiguration:
+        MaximumPercent: 200 #200% starts a new same group of tasks before stopping the other tasks to be drained
+        MinimumHealthyPercent: 100 #the service scheduler can't remove existing tasks until the replacement tasks are considered healthy.
+      DesiredCount: !Ref 'DesiredCount'
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups: !Ref 'FargateContainerSecurityGroup'
+          Subnets: !Ref 'TaskSubnets'
+      TaskDefinition: !Ref 'TaskDefinition'
+      LoadBalancers:
+      - ContainerName: !Join ["-", [ !Ref Name, !Ref Environment, !Ref TaskNameWeb ] ]
+        ContainerPort: !Ref 'ContainerPort'
+        TargetGroupArn: !Ref TargetGroupLoadBalancerArn
+  ServiceAutoscalingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - application-autoscaling.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: /
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+              - application-autoscaling:*
+              - cloudwatch:DescribeAlarms
+              - cloudwatch:PutMetricAlarm
+              - ecs:DescribeServices
+              - ecs:UpdateService
+            Resource: '*'
+  ServiceScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    DependsOn: Service
+    Properties:
+      MaxCapacity: 20
+      MinCapacity: !Ref 'DesiredCount'
+      ResourceId: !Join ['', [service/, !Ref 'ECSCluster', /, !GetAtt [Service, Name]]]
+      RoleARN: !GetAtt ServiceAutoscalingRole.Arn
+      ScalableDimension: 'ecs:service:DesiredCount'
+      ServiceNamespace: ecs
+  ServiceScaleCPU50Policy:
+    Type: "AWS::ApplicationAutoScaling::ScalingPolicy"
+    Properties:
+      PolicyName: 'ServiceCPU50Policy'
+      PolicyType: 'TargetTrackingScaling'
+      ScalingTargetId: !Ref 'ServiceScalingTarget'
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: '50'
+        ScaleInCooldown: '10'
+        ScaleOutCooldown: '300'
+        PredefinedMetricSpecification:
+          PredefinedMetricType: 'ECSServiceAverageCPUUtilization'
+Outputs:
+  ClusterName:
+    Description: The name of the ECS cluster
+    Value: !Ref 'ECSCluster'
+  ServiceARN:
+    Description: ECS Service
+    Value: !Ref Service
+  ServiceName:
+    Description: ECS Service
+    Value: !GetAtt Service.Name
+  TaskARN:
+    Description: ECS TaskDefinition
+    Value: !Ref TaskDefinition
+  Environment:
+    Description: The environment Type
+    Value: !Ref Environment
+  CloudWatchStreamURL:
+    Description: CloudWatch url.
+    Value: !Sub https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#logStream:group=/aws/ecs/${Name}/${Environment}
+  FargateURL:
+    Description: Fargate url.
+    Value: !Sub https://console.aws.amazon.com/ecs/home?region=${AWS::Region}#/clusters/${ECSCluster}/services

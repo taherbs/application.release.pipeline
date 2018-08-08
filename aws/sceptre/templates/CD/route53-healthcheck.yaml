@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  Name:
+    Description: The service name
+    Type: String
+  Environment:
+    Description: Environment name.
+    Type: String
+  ServiceUrl:
+    Description: The name of the domain for the hosted zone where you want to add the record set.
+    Type: String
+  HealthCheckPath:
+    Type: String
+  EmailAddressTeams:
+    Type: String
+Resources:
+  TestEndpointHealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        Port: "443"
+        Type: "HTTPS"
+        ResourcePath: !Ref HealthCheckPath
+        FullyQualifiedDomainName: !Select [1, !Split ['https://', !Ref ServiceUrl]]
+        RequestInterval: "30"
+        FailureThreshold: "2"
+        MeasureLatency: 'true'
+        EnableSNI: 'true'
+      HealthCheckTags: 
+      - Key: Name
+        Value: !Join ['-', [!Ref 'Name', !Ref 'Environment']]
+      - Key: Project
+        Value: !Ref Name
+      - Key: Environment
+        Value: !Ref Environment
+  HealthChecksSnsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+        - Endpoint: !Ref EmailAddressTeams
+          Protocol: email
+  HealthChecksAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmDescription: Alert when Health Check is down
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: HealthCheckId
+          Value: !Ref 'TestEndpointHealthCheck'
+      EvaluationPeriods: '3'
+      MetricName: HealthCheckStatus
+      Namespace: AWS/Route53
+      Period: '60'
+      Statistic: Minimum
+      Threshold: '1'
+      AlarmActions:
+        - !Ref HealthChecksSnsTopic
+      OKActions:
+        - !Ref HealthChecksSnsTopic
+Outputs:
+  Route53HealthcheckId:
+    Value: !Ref TestEndpointHealthCheck
+  Route53HealthchecksURL:
+    Description: CloudWatch url.
+    Value: https://console.aws.amazon.com/route53/healthchecks/home#/

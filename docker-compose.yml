@@ -1,0 +1,65 @@
+version: '3.3'
+services:
+
+  ### Web and App Container ####
+  web:
+    build:
+      context: ./
+      dockerfile: ./docker_artifacts/web/Dockerfile
+      args:
+        - FCGI_HOST=php
+    ports:
+      - "8080:80"
+    volumes:
+      - ./code/:/var/www/
+    networks:
+      - frontend
+  ### Service App Container ####
+  php:
+    build:
+      context: ./
+      dockerfile: docker_artifacts/app/Dockerfile
+    environment:
+      - APP_ENV=local
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./code/:/var/www/
+    networks:
+      - frontend
+      - backend  
+
+  #### Redis Container ###
+  #redis:
+  #  build:
+  #    context: ./
+  #    dockerfile: ./docker_artifacts/redis/Dockerfile
+  #  volumes:
+  #    - ./local_data_save:/var/lib/mysql
+  #  ports:
+  #    - "6379:6379"
+  #  networks:
+  #    - backend
+#
+  #### MySQL Container ###
+  #mysql:
+  #  build:
+  #    context: ./
+  #    dockerfile: ./docker_artifacts/mysql/Dockerfile
+  #  volumes:
+  #    - ./local_data_save:/var/lib/mysql
+  #  restart: always
+  #  environment:
+  #    MYSQL_ROOT_PASSWORD: admin
+  #    MYSQL_DATABASE: db
+  #    MYSQL_USER: admin
+  #    MYSQL_PASSWORD: admin
+  #  networks:
+  #    - backend
+
+### Networks Setup ###
+networks:
+  frontend:
+    driver: "bridge"
+  backend:
+    driver: "bridge"

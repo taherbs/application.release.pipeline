@@ -1,0 +1,6 @@
+template_path: templates/CI/ecr.yaml
+parameters:
+  Name: {{ environment_config.project_code }}
+  Image: web
+stack_tags:
+  project: {{ environment_config.project_code }}

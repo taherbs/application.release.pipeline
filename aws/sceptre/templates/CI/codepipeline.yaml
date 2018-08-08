@@ -1,0 +1,223 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  Name:
+    Description: The service name
+    Type: String
+  KMSArtifactKeyArn:
+    Description: KMS Key ARN for encrypt/decrypt artifact.
+    Type: String
+  S3BucketOutputArtifact:
+    Description: S3 Bucket Name for output artifact.
+    Type: String
+  GitToken:
+    Type: String
+    Description: Token to access GITHUB Private repos
+    NoEcho: true
+  GitOwner:
+    Type: String
+    Description: Project owner - organisation name or owner name
+  GitRepositoryApplication:
+    Description: GIT repository name where application code resides.
+    Type: String
+  GitBranchApplication:
+    Description: GIT branch name where application code resides.
+    Type: String
+  BuildApp:
+    Type: String
+  BuildWeb:
+    Type: String
+  BuildDeployStg:
+    Type: String
+  BuildDeployPrd:
+    Type: String
+  SNSTopic:
+    Type: String
+Resources:
+  CodePipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Join ["-", [ !Ref Name, 'codepipeline' ] ]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - codepipeline.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: !Ref Name
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action: kms:*
+            Resource: "*"
+          - Action:
+            - ec2:*
+            - elasticloadbalancing:*
+            - autoscaling:*
+            - cloudwatch:*
+            - s3:*
+            - sns:*
+            - cloudformation:*
+            - rds:*
+            - sqs:*
+            - ecs:*
+            - iam:PassRole
+            Resource: "*"
+            Effect: Allow
+          - Action:
+            - lambda:InvokeFunction
+            - lambda:ListFunctions
+            Resource: "*"
+            Effect: Allow
+          - Action:
+            - cloudformation:*
+            Resource: "*"
+            Effect: Allow
+          - Action:
+            - codebuild:BatchGetBuilds
+            - codebuild:StartBuild
+            Resource: "*"
+            Effect: Allow
+          Version: '2012-10-17'
+  CodePipelineStageChange:
+      Type: "AWS::Events::Rule"
+      Properties:
+        Description: "Push message to topic when build state change"
+        EventPattern:
+          {
+            "source": [
+              "aws.codepipeline"
+            ],
+            "detail-type": [
+              "CodePipeline Stage Execution State Change"
+            ],
+            "detail": {
+              "pipeline": [
+                !Ref ApplicationPipeline
+              ],
+              "stage": [
+                "Source",
+                "Staging",
+                "Production"
+              ],
+              "state": [
+                "STARTED",
+                "FAILED"
+              ]
+            }
+          }
+        Name:
+          Fn::Join:
+          - "-"
+          - - !Ref Name
+            - "CodePipelineStageChange"
+        Targets:
+          - Arn: !Ref SNSTopic
+            Id: "PipelineNotificationTopic"
+            InputTransformer:
+              InputPathsMap:
+                pipeline: "$.detail.pipeline"
+                stage: "$.detail.stage"
+                state: "$.detail.state"
+              InputTemplate: '"The Pipeline <pipeline> has reached the status of <state> for stage <stage>. You can check your pipeline at this link https://console.aws.amazon.com/codeaws/home?region=eu-west-1#/view/<pipeline>"'
+  ApplicationPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Ref Name
+      RoleArn: !GetAtt CodePipelineRole.Arn
+      Stages:
+      - Name: Source
+        Actions:
+          - Name: Application
+            ActionTypeId:
+              Category: Source
+              Owner: ThirdParty
+              Version: '1'
+              Provider: GitHub
+            OutputArtifacts:
+            - Name: ApplicationSource
+            Configuration:
+              Owner: !Ref GitOwner
+              Repo: !Ref GitRepositoryApplication
+              Branch: !Ref GitBranchApplication
+              OAuthToken: !Ref GitToken
+            RunOrder: 1
+      - Name: Build
+        Actions:
+        - Name: Web
+          InputArtifacts:
+          - Name: ApplicationSource
+          ActionTypeId:
+            Category: Build
+            Owner: AWS
+            Version: '1'
+            Provider: CodeBuild
+          OutputArtifacts:
+          - Name: BuildWebOutput
+          Configuration:
+            ProjectName: !Ref BuildWeb
+          RunOrder: 1
+        - Name: App
+          InputArtifacts:
+          - Name: ApplicationSource
+          ActionTypeId:
+            Category: Build
+            Owner: AWS
+            Version: '1'
+            Provider: CodeBuild
+          OutputArtifacts:
+          - Name: BuildAppOutput
+          Configuration:
+            ProjectName: !Ref BuildApp
+          RunOrder: 1
+      - Name: Staging
+        Actions:
+        - Name: DeployStgApp
+          InputArtifacts:
+          - Name: ApplicationSource
+          ActionTypeId:
+            Category: Build
+            Owner: AWS
+            Version: '1'
+            Provider: CodeBuild
+          Configuration:
+            ProjectName: !Ref BuildDeployStg
+          RunOrder: 1
+      - Name: Production
+        Actions:
+        - Name: Approve
+          ActionTypeId:
+            Category: Approval
+            Owner: AWS
+            Version: 1
+            Provider: Manual
+          Configuration:
+            NotificationArn: !Ref SNSTopic
+            CustomData:
+              Fn::Sub: 'Do you want to continue and publish on the production stack?'
+          RunOrder: 1
+        - Name: DeployPrdApp
+          InputArtifacts:
+          - Name: ApplicationSource
+          ActionTypeId:
+            Category: Build
+            Owner: AWS
+            Version: '1'
+            Provider: CodeBuild
+          Configuration:
+            ProjectName: !Ref BuildDeployPrd
+          RunOrder: 2
+      ArtifactStore:
+        Type: S3
+        Location: !Ref S3BucketOutputArtifact
+        EncryptionKey:
+          Id: !Ref KMSArtifactKeyArn
+          Type: KMS
+Outputs:
+  PipelineURL:
+    Description: CodePipeline url.
+    Value: !Sub https://console.aws.amazon.com/codeaws/home?region=${AWS::Region}#/view/${ApplicationPipeline}
