@@ -9,5 +9,7 @@ parameters:
   ECSTaskExecutionRole: !stack_output cd/prd/ecs/fargaterole::ECSTaskExecutionRole
   TaskSubnets: {{ environment_config.project_app_subnets }}
   FargateContainerSecurityGroup: !stack_output cd/prd/ecs/fargaterole::FargateContainerSecurityGroup
+  TagApp: {{ environment_config.project_code }}-app
+  TagWeb: {{ environment_config.project_code }}-web
 stack_tags:
   project: {{ environment_config.project_code }}
