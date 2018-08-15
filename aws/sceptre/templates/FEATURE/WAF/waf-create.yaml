@@ -1,0 +1,193 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  WAFWhitelistSet:
+    Type: AWS::WAFRegional::IPSet
+    Properties:
+      Name:
+        Fn::Join:
+        - " - "
+        - - Ref: AWS::StackName
+          - Whitelist Set
+  WAFBlacklistSet:
+    Type: AWS::WAFRegional::IPSet
+    
+    Properties:
+      Name:
+        Fn::Join:
+        - " - "
+        - - Ref: AWS::StackName
+          - Blacklist Set
+  WAFSqlInjectionDetection:
+    Type: AWS::WAFRegional::SqlInjectionMatchSet
+    Properties:
+      Name:
+        Fn::Join:
+        - " - "
+        - - Ref: AWS::StackName
+          - SQL injection Detection
+      SqlInjectionMatchTuples:
+      - FieldToMatch:
+          Type: QUERY_STRING
+        TextTransformation: URL_DECODE
+      - FieldToMatch:
+          Type: QUERY_STRING
+        TextTransformation: HTML_ENTITY_DECODE
+      - FieldToMatch:
+          Type: BODY
+        TextTransformation: URL_DECODE
+      - FieldToMatch:
+          Type: BODY
+        TextTransformation: HTML_ENTITY_DECODE
+      - FieldToMatch:
+          Type: URI
+        TextTransformation: URL_DECODE
+      - FieldToMatch:
+          Type: URI
+        TextTransformation: HTML_ENTITY_DECODE
+      - FieldToMatch:
+          Type: HEADER
+          Data: Cookie
+        TextTransformation: URL_DECODE
+      - FieldToMatch:
+          Type: HEADER
+          Data: Cookie
+        TextTransformation: HTML_ENTITY_DECODE
+      - FieldToMatch:
+          Type: HEADER
+          Data: Authorization
+        TextTransformation: URL_DECODE
+      - FieldToMatch:
+          Type: HEADER
+          Data: Authorization
+        TextTransformation: HTML_ENTITY_DECODE
+  WAFXssDetection:
+    Type: AWS::WAFRegional::XssMatchSet
+    Properties:
+      Name:
+        Fn::Join:
+        - " - "
+        - - Ref: AWS::StackName
+          - XSS Detection Detection
+      XssMatchTuples:
+      - FieldToMatch:
+          Type: QUERY_STRING
+        TextTransformation: URL_DECODE
+      - FieldToMatch:
+          Type: QUERY_STRING
+        TextTransformation: HTML_ENTITY_DECODE
+      - FieldToMatch:
+          Type: BODY
+        TextTransformation: URL_DECODE
+      - FieldToMatch:
+          Type: BODY
+        TextTransformation: HTML_ENTITY_DECODE
+      - FieldToMatch:
+          Type: URI
+        TextTransformation: URL_DECODE
+      - FieldToMatch:
+          Type: URI
+        TextTransformation: HTML_ENTITY_DECODE
+      - FieldToMatch:
+          Type: HEADER
+          Data: Cookie
+        TextTransformation: URL_DECODE
+      - FieldToMatch:
+          Type: HEADER
+          Data: Cookie
+        TextTransformation: HTML_ENTITY_DECODE
+  WAFWhitelistRule:
+    Type: AWS::WAFRegional::Rule
+    DependsOn: WAFWhitelistSet
+    Properties:
+      Name:
+        Fn::Join:
+        - " - "
+        - - Ref: AWS::StackName
+          - Whitelist Rule
+      MetricName: SecurityAutomationsWhitelistRule
+      Predicates:
+      - DataId:
+          Ref: WAFWhitelistSet
+        Negated: false
+        Type: IPMatch
+  WAFBlacklistRule:
+    Type: AWS::WAFRegional::Rule
+    DependsOn: WAFBlacklistSet
+    Properties:
+      Name:
+        Fn::Join:
+        - " - "
+        - - Ref: AWS::StackName
+          - Blacklist Rule
+      MetricName: SecurityAutomationsBlacklistRule
+      Predicates:
+      - DataId:
+          Ref: WAFBlacklistSet
+        Negated: false
+        Type: IPMatch
+  WAFSqlInjectionRule:
+    Type: AWS::WAFRegional::Rule
+    DependsOn: WAFSqlInjectionDetection
+    Properties:
+      Name:
+        Fn::Join:
+        - " - "
+        - - Ref: AWS::StackName
+          - SQL Injection Rule
+      MetricName: SecurityAutomationsSqlInjectionRule
+      Predicates:
+      - DataId:
+          Ref: WAFSqlInjectionDetection
+        Negated: false
+        Type: SqlInjectionMatch
+  WAFXssRule:
+    Type: AWS::WAFRegional::Rule
+    DependsOn: WAFXssDetection
+    Properties:
+      Name:
+        Fn::Join:
+        - " - "
+        - - Ref: AWS::StackName
+          - XSS Rule
+      MetricName: SecurityAutomationsXssRule
+      Predicates:
+      - DataId:
+          Ref: WAFXssDetection
+        Negated: false
+        Type: XssMatch
+  WAFWebACL:
+    Type: AWS::WAFRegional::WebACL
+    DependsOn:
+    - WAFWhitelistRule
+    Properties:
+      Name:
+        Ref: AWS::StackName
+      DefaultAction:
+        Type: ALLOW
+      MetricName: SecurityAutomationsMaliciousRequesters
+      Rules:
+      - Action:
+          Type: BLOCK
+        Priority: 10
+        RuleId:
+          Ref: WAFWhitelistRule
+      - Action:
+          Type: BLOCK
+        Priority: 11
+        RuleId:
+          Ref: WAFBlacklistRule
+      - Action:
+          Type: BLOCK
+        Priority: 12
+        RuleId:
+          Ref: WAFSqlInjectionRule
+      - Action:
+          Type: BLOCK
+        Priority: 13
+        RuleId:
+          Ref: WAFXssRule
+Outputs:
+  WAFWebACL:
+    Description: AWS WAF WebACL ID
+    Value:
+      Ref: WAFWebACL

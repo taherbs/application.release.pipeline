@@ -10,7 +10,6 @@ parameters:
   ElbCert: {{ environment_config.elb_cert }}
   ALBPolicyType: {{ environment_config.stg_alb_policy }}
   HealthCheckPath: {{ environment_config.elb_health_check_path }}
-  ActivateWAF: {{ environment_config.enable_waf }}
   LogBucketName: {{ environment_config.s3_elb_logs_bucket }}
 stack_tags:
   project: {{ environment_config.project_code }}

@@ -43,18 +43,8 @@ Parameters:
     Default: '0.0.0.0/0'
   HealthCheckPath:
     Type: String
-  WebACLId:
-    Type: String
-    Default: ''
-  ActivateWAF:
-    Type: String
-    AllowedValues:
-      - 'enabled'
-      - 'disabled'
-    Default: 'enabled'
 Conditions:
   CheckALBPolicyType: !Equals [!Ref ALBPolicyType, "public"]
-  WAFActivated: !Equals [!Ref ActivateWAF, 'enabled']
 Resources:
   PublicLoadBalancerSG:
     Type: AWS::EC2::SecurityGroup
@@ -156,12 +146,6 @@ Resources:
       - Field: path-pattern
         Values:
         - !Ref Path
-  WAFAssociation:
-    Type: AWS::WAFRegional::WebACLAssociation
-    Condition: WAFActivated
-    Properties:
-      ResourceArn: !Ref LoadBalancer
-      WebACLId: !Ref WebACLId
   RecordSet:
     Type: AWS::Route53::RecordSet
     Properties:
@@ -178,6 +162,9 @@ Outputs:
   TargetGroupLoadBalancerArn:
     Description: ARN for the Frontend Application LoadBalancer target group
     Value: !Ref TargetGroupLoadBalancer
+  LoadBalancerArn:
+    Description: ALB endpoint ARN
+    Value: !Ref LoadBalancer
   LoadBalancerEndpoint:
     Description: ALB endpoint name
     Value: !GetAtt LoadBalancer.DNSName

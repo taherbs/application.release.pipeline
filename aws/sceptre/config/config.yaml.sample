@@ -20,3 +20,6 @@ hosted_zone_name: something.company.net
 hosted_zone_id: XXXXXXXXX
 elb_cert: XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
 elb_health_check_path: /hc/index.htmlxz
+project_subdomain: myservicetest
+stg_alb_policy: trusted
+prd_alb_policy: public

@@ -1,0 +1,12 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  LoadBalancer:
+    Type: String
+  WAFWebACLId:
+    Type: String
+Resources:
+  WAFAssociation:
+    Type: AWS::WAFRegional::WebACLAssociation
+    Properties:
+      ResourceArn: !Ref LoadBalancer
+      WebACLId: !Ref WAFWebACLId

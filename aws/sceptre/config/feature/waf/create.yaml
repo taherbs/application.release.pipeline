@@ -1,0 +1,3 @@
+template_path: templates/FEATURE/WAF/waf-create.yaml
+stack_tags:
+  project: {{ environment_config.project_code }}

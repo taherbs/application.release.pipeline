@@ -17,6 +17,7 @@ cd sceptre
 sceptre launch-env misc
 sceptre launch-env ci
 sceptre launch-env cd
+sceptre launch-env feature/waf
 ```
 
 ### Other Sceptre useful commands

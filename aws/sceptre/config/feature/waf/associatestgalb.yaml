@@ -1,0 +1,6 @@
+template_path: templates/FEATURE/WAF/waf-associate-alb.yaml
+parameters:
+  WAFWebACLId: !stack_output feature/waf/create::WAFWebACL
+  LoadBalancer: !stack_output_external {{ environment_config.project_code }}-cd-stg-net-alb::LoadBalancerArn
+stack_tags:
+  project: {{ environment_config.project_code }}

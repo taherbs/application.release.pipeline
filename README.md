@@ -93,4 +93,7 @@ cd aws/sceptre
 sceptre launch-env misc
 sceptre launch-env ci
 sceptre launch-env cd
+sceptre launch-env feature/waf #(Optional - Please read the note bellow)
 ```
+
+**Note:** In this project, WAF creation and association to ALB is part of the service deployment, in real use cases you will probably need to create WAF as part of the infrastructure deployment, then reuse the created WAF ID in your association.
