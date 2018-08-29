@@ -37,6 +37,10 @@ sql:
 rm-data:
 	rm -rf ./local_data_save/* && echo "*\n!.gitignore" > ./local_data_save/.gitignore
 
+.PHONY: delete-env
+delete-env:
+	cd ./aws/sceptre && sceptre delete-env feature && sceptre delete-env cd && sceptre delete-env ci && sceptre delete-env misc
+
 .PHONY: clean
 clean: stop rm-data
 	docker-compose rm -f -s -v
