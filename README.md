@@ -38,6 +38,7 @@ This is just a starting point for your CI/CD pipelines this should be an excelle
 - Public/ELB subnet(s)
 - Route53 hosted zone
 - Domain/ELB certificate
+- WAF (Optional)
 
 # Configuration
 
@@ -75,6 +76,25 @@ make start-new
 # Stop containers
 make stop
 ```
+
+## Resources that will get created
+
+### MISC
+- SNS Topic - for sending failure alerts
+
+### CI
+- ECR Repos - storing the application containers.
+- Codebuild - building/deploying the application containers.
+- CodePipeline - automating pipeline build/deployment.
+
+### CD
+- ECS (Fargate) - defining service containers deployment/configuration
+- NET (ELB) - defining service ALB deployment/configuration
+- Route53 healthcheck - defining the domain healthcheck
+- CloudWatch - defining cloudwatch loggroups, filters, alerts and dashbords 
+
+### FEATURE
+- WAF - Setting waf creation and alb association (optional)
 
 ## Deploy Service to AWS
 
