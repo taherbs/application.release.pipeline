@@ -20,14 +20,16 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Sid: SourceCodePipelineToTopic
+          - Sid: AccountResourcesToTopic
             Effect: 'Allow'
             Principal:
-              Service:
-              - events.amazonaws.com
+              AWS: '*'
             Action:
               - 'sns:Publish'
             Resource: !Ref SNSTopic
+            Condition:
+              StringEquals:
+                AWS:SourceOwner: !Ref AWS::AccountId
       Topics:
         - !Ref SNSTopic
 Outputs:

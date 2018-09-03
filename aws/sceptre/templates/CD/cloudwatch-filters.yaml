@@ -1,0 +1,107 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  CloudWatch filters and Alamrs
+
+Parameters:
+
+  Name:
+    Description: Project name.
+    Type: String
+  Environment:
+    Description: Environment name.
+    Type: String
+  ServiceLogGroup:
+    Description: Service log group
+    Type: String
+  AlarmSnsTopic:
+    Description: Alarm sns topic
+    Type: String
+
+Resources:
+
+  # FOR TEST
+  200MetricFilter: 
+    Type: AWS::Logs::MetricFilter
+    Properties: 
+      LogGroupName: !Ref ServiceLogGroup
+      FilterPattern: "{ $.fields.status = \"200\" }"
+      MetricTransformations: 
+        - 
+          MetricValue: "1"
+          MetricNamespace: !Sub "SERVICE/${Name}-${Environment}-WebServer"
+          MetricName: "200Count"
+
+  404MetricFilter: 
+    Type: AWS::Logs::MetricFilter
+    Properties: 
+      LogGroupName: !Ref ServiceLogGroup
+      FilterPattern: "{ $.fields.status = \"404\" }"
+      MetricTransformations: 
+        - 
+          MetricValue: "1"
+          MetricNamespace: !Sub "SERVICE/${Name}-${Environment}-WebServer"
+          MetricName: "404Count"
+
+  5XXMetricFilter: 
+    Type: AWS::Logs::MetricFilter
+    Properties: 
+      LogGroupName: !Ref ServiceLogGroup
+      FilterPattern: "{ $.fields.status = \"5*\" }"
+      MetricTransformations: 
+        - 
+          MetricValue: "1"
+          MetricNamespace: !Sub "SERVICE/${Name}-${Environment}-WebServer"
+          MetricName: "5XXCount"
+
+  # FOR TEST
+  200MetricAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+        AlarmName: !Sub "${Name}-${Environment}-Web200Alarm"
+        AlarmDescription: "Trigger an alarm if the web returns 5XX"
+        MetricName: "200Count"
+        Namespace: !Sub "SERVICE/${Name}-${Environment}-WebServer"
+        Statistic: "SampleCount"
+        Period: 60
+        EvaluationPeriods: 2
+        Threshold: 1
+        ComparisonOperator: "GreaterThanOrEqualToThreshold"
+        AlarmActions:
+          - !Ref AlarmSnsTopic
+        OKActions:
+          - !Ref AlarmSnsTopic
+
+  404MetricAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+        AlarmName: !Sub "${Name}-${Environment}-Web404Alarm"
+        AlarmDescription: "Trigger an alarm if the web returns 5XX"
+        MetricName: "404Count"
+        Namespace: !Sub "SERVICE/${Name}-${Environment}-WebServer"
+        Statistic: "SampleCount"
+        Period: 60
+        EvaluationPeriods: 2
+        Threshold: 1
+        ComparisonOperator: "GreaterThanOrEqualToThreshold"
+        AlarmActions:
+          - !Ref AlarmSnsTopic
+        OKActions:
+          - !Ref AlarmSnsTopic
+
+  5XXMetricAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+        AlarmName: !Sub "${Name}-${Environment}-Web5XXAlarm"
+        AlarmDescription: "Trigger an alarm if the web returns 5XX"
+        MetricName: "5XXCount"
+        Namespace: !Sub "SERVICE/${Name}-${Environment}-WebServer"
+        Statistic: "SampleCount"
+        Period: 60
+        EvaluationPeriods: 2
+        Threshold: 1
+        ComparisonOperator: "GreaterThanOrEqualToThreshold"
+        AlarmActions:
+          - !Ref AlarmSnsTopic
+        OKActions:
+          - !Ref AlarmSnsTopic
