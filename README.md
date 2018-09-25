@@ -1,4 +1,5 @@
 # Example release pipeline for a PHP applications
+[![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/taherbs/application.release.pipeline/master/LICENSE)
 
 This project will work as a template for PHP microservices CI/CD.
 This infrastructure could be reused for other framework different than PHP.
